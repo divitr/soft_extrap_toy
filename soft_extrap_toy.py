@@ -112,8 +112,45 @@ for i in range(train_df.shape[0]):
       if (bins_src[j] < train_df.iloc[i, 0] <= bins_src[j+1]): #is src and is in bin size
         train_df.iloc[i, train_df.columns.get_loc('weight')] = weights[j]
         break
+#####################cut off##################################
+#Here is Wei's method to obtain weights. Code out of cut-off line is unchanged. 
+# run the code from line 1 to line 98 first, and run the code after line 115  
+model_assist = keras.Sequential()
+model_assist.add(layers.Dense(20,activation='relu',input_shape = (3,)))
+model_assist.add(layers.Dense(40,activation='relu'))
+model_assist.add(layers.Dense(1,activation='sigmoid'))
+model_assist.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
+tr_src = pd.DataFrame({'pt':df_src['pt'], 'f1':df_src['f1'], 'f2':df_src['f2']})
+tr_back =  pd.DataFrame({'pt':df_back['pt'], 'f1':df_back['f1'], 'f2':df_back['f2']})
+train_pt_x = pd.concat([tr_src,tr_back])
 
+pt_src_y = df_src['label_source']
+pt_back_y = df_back['label_source']
+train_pt_y = pd.concat([pt_src_y,pt_back_y])
 
+model_assist.fit(x=train_pt_x,y=train_pt_y,batch_size=50,epochs=20,shuffle=True,verbose=1)
+
+train_df = generate_data() #in order to make prediction, have to update train_df
+#finally, weight column will match the data here
+
+df_src = train_df.loc[(train_df['label_source'] == 1)]
+df_back = train_df.loc[(train_df['label_background'] == 1)]
+df_tar = train_df.loc[(train_df['label_target'] == 1)]
+te_src = pd.DataFrame({'pt':df_src['pt'], 'f1':df_src['f1'], 'f2':df_src['f2']})
+te_back =  pd.DataFrame({'pt':df_back['pt'], 'f1':df_back['f1'], 'f2':df_back['f2']})
+test_pt_x = pd.concat([te_src,te_back])
+y_pred_keras = model_assist.predict(test_pt_x)
+weight = np.divide( y_pred_keras, 1-y_pred_keras)
+size = 50000
+weight[0:size] = weight[0:size] / np.sum(weight[0:size]) * np.sum(weight[size:2 * size]) #summation of weights of source and weights of background should be the same 
+
+#verify: just plot them
+plt.hist(df_src['pt'].to_numpy(), bins, density=True, histtype='step',color = 'r', label = 'Source',weights=weight[0:size])
+#weight[0:size] is for source
+plt.hist(df_back['pt'].to_numpy(), bins, density=True, histtype='step',color = 'g', label = 'Background',weights=weight[size:2 * size])
+#weight[size:2*size] is for background
+plt.legend()
+#####################cut off#################################
 sum_src = 0
 for i in range(len(df_src)):
   sum_src = sum_src + df_src.iloc[i,6]

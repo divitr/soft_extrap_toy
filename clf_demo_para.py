@@ -18,6 +18,7 @@ import time
 import matplotlib.pyplot as plt
 import math
 from math import isnan
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.models import Model
 from sklearn.ensemble import RandomForestClassifier
@@ -139,20 +140,20 @@ def generate_pt(num: int):
    
     ##################################################generate data#################################################
 def build_model():
-    tuner = tfdf.tuner.RandomSearch(num_trials=20)
+    #tuner = tfdf.tuner.RandomSearch(num_trials=20)
 
     # Hyper-parameters to optimize.
     #tuner.discret("max_depth", [4, 5, 6, 7])
 
-    model = tfdf.keras.RandomForestModel(tuner=tuner)
-    # model = Sequential()
-    # model.add(Dense(8, input_dim=3, activation='relu'))
-    # model.add(Dense(16, activation='relu'))
+    #model = tfdf.keras.RandomForestModel(tuner=tuner)
+    model = Sequential()
+    model.add(Dense(8, input_dim=3, activation='relu'))
+    model.add(Dense(16, activation='relu'))
     # #model.add(Dense(160, activation='relu'))
     # #model.add(Dense(20, activation='relu'))
     # model.add(Dense(1, activation='sigmoid'))
     # # Compile model
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=.001), metrics=['accuracy'])
     '''
     inputs = Input(shape=(3,))
     hidden = Dense(n_nodes_clf, activation='relu')(inputs)
