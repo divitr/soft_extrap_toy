@@ -26,6 +26,8 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.wrappers.scikit_learn import KerasClassifier
 import tensorflow_decision_forests as tfdf
+import csv
+
 
 def generate_data(num:int, class_name: str, para_bool: int):
     np.random.seed(int(time.time() + np.random.rand(1)+3))
@@ -198,100 +200,134 @@ def generate_data(num:int, class_name: str, para_bool: int):
     return f, y ,weight#if 'target', weight = []
 def build_model_unpara():
     model = Sequential()
-    model.add(Dense(8, input_dim=2, activation='relu'))
-    model.add(Dense(16, activation='relu'))
+    model.add(Dense(12, input_dim=2, activation='relu'))
+    model.add(Dense(24, activation='relu'))
     model.add(Dense(1, activation='sigmoid'))
     # Compile model
     model.compile(loss='mean_squared_error', optimizer=Adam(learning_rate=.001), metrics=['accuracy'])
     return model
 def build_model_para():
     model = Sequential()
-    model.add(Dense(8, input_dim=3, activation='relu'))
-    model.add(Dense(16, activation='relu'))
+    model.add(Dense(12, input_dim=3, activation='relu'))
+    model.add(Dense(24, activation='relu'))
     model.add(Dense(1, activation='sigmoid'))
     # Compile model
     model.compile(loss='mean_squared_error', optimizer=Adam(learning_rate=.001), metrics=['accuracy'])
     return model
 if __name__ == "__main__":
-    num_list = [0.1, 0.5, 1, 2, 4, 8, 20, 50, 100, 500] 
+    header = ['unpara_tt', 'unpara_st', 'para_tt', 'para_ts']
+
+    with open('/mnt/d/DW_project/num/0617/outcome_auc.csv', 'a+', encoding='UTF8') as f:
+        writer = csv.writer(f)
+
+        # write the header
+        writer.writerow(header)
+    num_list = [0.1, 0.5, 1, 4, 8, 20, 50, 100, 500] 
+    #num_list = [ 8, 20]
     num_list = np.multiply(num_list , 1000)
+    num_list.astype(int)
     for num in num_list:
-        ##########################################################
-        #un-para
-        f_source_train, y_f_source_train, weight_src_tr = generate_data(num, 'source',0)
-        # plt.hist(f_source_train['pt'][0:num], bins=100, range=[0,500],density = True ,color ='r',histtype='step',label = 'pt_source', weights=  weight_src_tr[0:num])
-        # plt.hist(f_source_train['pt'][num:2*num], bins=100, range=[0,500] ,density = True,color ='b',histtype='step',label = 'pt_target', weights=  weight_src_tr[num:2*num])
+        auc_tt_list = []
+        auc_st_list = []
+        auc_p_tt_list = []
+        auc_p_st_list = []
+        for i_loop in [0,1,2,3,4]:#,5,6,7,8,9]:
+            try:
+                num = int(num)
+                ##########################################################
+                #un-para
+                f_source_train, y_f_source_train, weight_src_tr = generate_data(num, 'source',0)
+                # plt.hist(f_source_train['pt'][0:num], bins=100, range=[0,500],density = True ,color ='r',histtype='step',label = 'pt_source', weights=  weight_src_tr[0:num])
+                # plt.hist(f_source_train['pt'][num:2*num], bins=100, range=[0,500] ,density = True,color ='b',histtype='step',label = 'pt_target', weights=  weight_src_tr[num:2*num])
 
-        f_source_test, y_f_source_test,weight_src_te = generate_data(num, 'target',0)
-        
-        f_target_train,y_f_target_train, weight_tar_tr = generate_data(num, 'target',0)
-        
+                f_source_test, y_f_source_test,weight_src_te = generate_data(500000, 'target',0)
+                
+                f_target_train,y_f_target_train, weight_tar_tr = generate_data(num, 'target',0)
+                
 
-        f_target_test,y_f_target_test, weight_tar_tr = generate_data(num, 'target',0)
-        
+                f_target_test,y_f_target_test, weight_tar_tr = generate_data(500000, 'target',0)
+                
 
-        unP_model_st = build_model_unpara()
-        unP_model_st.fit(f_source_train, y_f_source_train, epochs=20, batch_size=40, verbose=1,shuffle=True,sample_weight = weight_src_tr)
-        y_unP_st = unP_model_st.predict(f_source_test)
-        fpr_st, tpr_st, thresholds_tt = roc_curve(y_f_source_test, y_unP_st)
-        auc_st = auc(fpr_st, tpr_st)
+                unP_model_st = build_model_unpara()
+                unP_model_st.fit(f_source_train, y_f_source_train, epochs=30, batch_size=80, verbose=1,shuffle=True,sample_weight = weight_src_tr,validation_split=0.1)
+                y_unP_st = unP_model_st.predict(f_source_test)
+                fpr_st, tpr_st, thresholds_tt = roc_curve(y_f_source_test, y_unP_st)
+                auc_st = auc(fpr_st, tpr_st)
 
-        unP_model_tt = build_model_unpara()
-        unP_model_tt.fit(f_target_train, y_f_target_train, epochs=20, batch_size=40, verbose=1,shuffle=True)
-        y_unP_tt = unP_model_tt.predict(f_target_test)
-        fpr_tt, tpr_tt, thresholds_tt = roc_curve(y_f_target_test, y_unP_tt)
-        auc_tt = auc(fpr_tt, tpr_tt)
+                unP_model_tt = build_model_unpara()
+                unP_model_tt.fit(f_target_train, y_f_target_train, epochs=30, batch_size=80, verbose=1,shuffle=True,validation_split=0.1)
+                y_unP_tt = unP_model_tt.predict(f_target_test)
+                fpr_tt, tpr_tt, thresholds_tt = roc_curve(y_f_target_test, y_unP_tt)
+                auc_tt = auc(fpr_tt, tpr_tt)
+                if auc_tt < 0.5 :
+                    auc_tt = 1 - auc_tt
+                    temp = tpr_tt
+                    tpr_tt = fpr_tt 
+                    fpr_tt = temp
+                plt.figure()
+                plt.plot([0, 1], [0, 1], 'k--')
+                plt.plot(fpr_st, tpr_st, label='source-target (area = {:.3f})'.format(auc_st))
+                auc_st_list = np.append(auc_st_list,auc_st)
+                plt.plot(fpr_tt, tpr_tt, label='target-target (area = {:.3f})'.format(auc_tt),linestyle = 'dashed')
+                auc_tt_list = np.append(auc_tt_list,auc_tt)
+                plt.xlabel('False positive rate')
+                plt.ylabel('True positive rate')
+                plt.title('(unpara)ROC curve')
+                plt.legend(loc='best')
+                plt.savefig('/mnt/d/DW_project/num/0617/' + str(num) + 'unpara' + str(i_loop)+ '.png')
+                plt.close()
 
-        plt.figure()
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.plot(fpr_st, tpr_st, label='source-target (area = {:.3f})'.format(auc_st))
-        plt.plot(fpr_tt, tpr_tt, label='target-target (area = {:.3f})'.format(auc_tt),linestyle = 'dashed')
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('(unpara)ROC curve')
-        plt.legend(loc='best')
-        plt.savefig('/mnt/d/DW_project/num/0611/' + str(num) + 'unpara' + '.png')
-        plt.close()
 
 
 
+                ##########################################################
+                #para
+                f_source_train, y_f_source_train, weight_src_tr = generate_data(num, 'source',1)
+                # plt.hist(f_source_train['pt'][0:num], bins=100, range=[0,500],density = True ,color ='r',histtype='step',label = 'pt_source', weights=  weight_src_tr[0:num])
+                # plt.hist(f_source_train['pt'][num:2*num], bins=100, range=[0,500] ,density = True,color ='b',histtype='step',label = 'pt_target', weights=  weight_src_tr[num:2*num])
 
-        ##########################################################
-        #para
-        f_source_train, y_f_source_train, weight_src_tr = generate_data(num, 'source',1)
-        # plt.hist(f_source_train['pt'][0:num], bins=100, range=[0,500],density = True ,color ='r',histtype='step',label = 'pt_source', weights=  weight_src_tr[0:num])
-        # plt.hist(f_source_train['pt'][num:2*num], bins=100, range=[0,500] ,density = True,color ='b',histtype='step',label = 'pt_target', weights=  weight_src_tr[num:2*num])
+                f_source_test, y_f_source_test,weight_src_te = generate_data(500000, 'target',1)
+                
+                f_target_train,y_f_target_train, weight_tar_tr = generate_data(num, 'target',1)
+                
 
-        f_source_test, y_f_source_test,weight_src_te = generate_data(num, 'target',1)
-        
-        f_target_train,y_f_target_train, weight_tar_tr = generate_data(num, 'target',1)
-        
+                f_target_test,y_f_target_test, weight_tar_tr = generate_data(500000, 'target',1)
+                
 
-        f_target_test,y_f_target_test, weight_tar_tr = generate_data(num, 'target',1)
-        
+                P_model_st = build_model_para()
+                P_model_st.fit(f_source_train, y_f_source_train, epochs=30, batch_size=50, verbose=1,shuffle=True,sample_weight = weight_src_tr,validation_split=0.1)
+                y_P_st = P_model_st.predict(f_source_test)
+                fpr_st, tpr_st, thresholds_tt = roc_curve(y_f_source_test, y_P_st)
+                auc_st = auc(fpr_st, tpr_st)
 
-        P_model_st = build_model_para()
-        P_model_st.fit(f_source_train, y_f_source_train, epochs=20, batch_size=40, verbose=1,shuffle=True,sample_weight = weight_src_tr)
-        y_P_st = P_model_st.predict(f_source_test)
-        fpr_st, tpr_st, thresholds_tt = roc_curve(y_f_source_test, y_P_st)
-        auc_st = auc(fpr_st, tpr_st)
-
-        P_model_tt = build_model_para()
-        P_model_tt.fit(f_target_train, y_f_target_train, epochs=20, batch_size=40, verbose=1,shuffle=True)
-        y_P_tt = P_model_tt.predict(f_target_test)
-        fpr_tt, tpr_tt, thresholds_tt = roc_curve(y_f_target_test, y_P_tt)
-        auc_tt = auc(fpr_tt, tpr_tt)
-
-        plt.figure()
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.plot(fpr_st, tpr_st, label='source-target (area = {:.3f})'.format(auc_st))
-        plt.plot(fpr_tt, tpr_tt, label='target-target (area = {:.3f})'.format(auc_tt),linestyle = 'dashed')
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('(para)ROC curve')
-        plt.legend(loc='best')
-        plt.savefig('/mnt/d/DW_project/num/0611/' + str(num) + 'para' + '.png')
-        plt.close()
+                P_model_tt = build_model_para()
+                P_model_tt.fit(f_target_train, y_f_target_train, epochs=30, batch_size=50, verbose=1,shuffle=True,validation_split=0.1)
+                y_P_tt = P_model_tt.predict(f_target_test)
+                fpr_tt, tpr_tt, thresholds_tt = roc_curve(y_f_target_test, y_P_tt)
+                auc_tt = auc(fpr_tt, tpr_tt)
+                if auc_tt < 0.5 :
+                    auc_tt = 1 - auc_tt
+                    temp = tpr_tt
+                    tpr_tt = fpr_tt 
+                    fpr_tt = temp
+                plt.figure()
+                plt.plot([0, 1], [0, 1], 'k--')
+                plt.plot(fpr_st, tpr_st, label='source-target (area = {:.3f})'.format(auc_st))
+                auc_p_st_list = np.append(auc_p_st_list,auc_st)
+                plt.plot(fpr_tt, tpr_tt, label='target-target (area = {:.3f})'.format(auc_tt),linestyle = 'dashed')
+                auc_p_tt_list = np.append(auc_p_tt_list,auc_tt)
+                plt.xlabel('False positive rate')
+                plt.ylabel('True positive rate')
+                plt.title('(para)ROC curve')
+                plt.legend(loc='best')
+                plt.savefig('/mnt/d/DW_project/num/0617/' + str(num) + 'para' + str(i_loop) + '.png')
+                plt.close()
+            except:
+                continue;
+        auc_row = [np.mean(auc_tt_list),np.mean(auc_st_list),np.mean(auc_p_tt_list),np.mean(auc_p_st_list)]
+        with open('/mnt/d/DW_project/num/0617/outcome_auc.csv', 'a+', encoding='UTF8') as f:
+            writer = csv.writer(f)
+            writer.writerow(auc_row)
 
 
 
