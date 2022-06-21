@@ -11,9 +11,9 @@ from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
 from tensorflow import keras
 from keras import layers
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Activation, Dense
-from tensorflow.keras import activations
+from keras.models import Sequential
+from keras.layers import Activation, Dense
+from keras import activations
 from tensorflow.keras.optimizers import Adam
 from sklearn.utils import shuffle
 from sklearn.metrics import roc_curve
@@ -24,6 +24,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 import seaborn as sns
 import random
+import math
 
 def generate_data(size):
   #generating pt (target)
@@ -151,8 +152,8 @@ def plot_pt(train_df):
         1: 1
     }
     return train_df,class_weights_nn, class_weights
-
-def train_models(train_df,class_weights_nn,class_weights):     #output 1 means background
+  
+  def train_models(train_df,class_weights_nn,class_weights):     #output 1 means background
     
     train_df = shuffle(train_df)
     
@@ -202,8 +203,8 @@ def train_models(train_df,class_weights_nn,class_weights):     #output 1 means b
     p_r_man.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight'].to_numpy(),class_weight=class_weights)
     
     return u_r_nn, u_r_man, p_r_nn, p_r_man
-
-def evaluate(test_df, u_nn, u_man, p_nn, p_man):
+  
+  def evaluate(test_df, u_nn, u_man, p_nn, p_man):
     X = test_df[['f1','f2']].to_numpy().reshape(-1,2)
     y = test_df['label_background'].to_numpy()
     
@@ -233,34 +234,141 @@ def evaluate(test_df, u_nn, u_man, p_nn, p_man):
     plt.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC (trained on src, evaluated on tar)')
+    plt.title('ROC (trained on src, evaluated on tar) - ' + str(size) + ' src samples')
     plt.legend(loc="lower right")
     plt.show()
     
     return u_nn_auc, u_man_auc, p_nn_auc, p_man_auc
+  
+  sizes = [1000, 5000, 10000, 20000, 50000, 100000]
+u_nn_avg = []
+u_man_avg = []
+p_nn_avg = []
+p_man_avg = []
 
-sizes = [10000, 25000, 50000, 100000]
-u_nn_data = []
-u_man_data = []
-p_nn_data = []
-p_man_data = []
+u_nn_err = []
+u_man_err = []
+p_nn_err = []
+p_man_err = []
+
+u_nn_auc_ls_g = []
+u_man_auc_ls_g = []
+p_nn_auc_ls_g = []
+p_man_auc_ls_g = []
+
+test_df = generate_data(100000)
 
 for size in sizes:
+    print(str(size)+'-----------------------------------------------------------------------------')
     train_df = generate_data(size)
     train_df, class_weights_nn, class_weights = plot_pt(train_df)
-    u_r_nn, u_r_man, p_r_nn, p_r_man = train_models(train_df, class_weights_nn, class_weights)
-    test_df = generate_data(50000)
-    u_nn_auc, u_man_auc, p_nn_auc, p_man_auc = evaluate(test_df, u_r_nn, u_r_man, p_r_nn, p_r_man)
-    u_nn_data.append((size,u_nn_auc))
-    u_man_data.append((size,u_man_auc))
-    p_nn_data.append((size,p_nn_auc))
-    p_man_data.append((size,p_man_auc))
-plt.plot(*zip(*u_nn_data),label='Unparameterized NN Reweighted')
-plt.plot(*zip(*u_man_data),label='Unparameterized Manually Reweighted')
-plt.plot(*zip(*p_nn_data),label='Parameterized NN Reweighted')
-plt.plot(*zip(*p_man_data),label='Parameterized Manually Reweighted')
+    models = []
+    for i in range(5):
+      u_r_nn, u_r_man, p_r_nn, p_r_man = train_models(train_df, class_weights_nn, class_weights)
+      models.append((u_r_nn,u_r_man,p_r_nn,p_r_man))
+    u_nn_auc_ls = []
+    u_man_auc_ls = []
+    p_nn_auc_ls = []
+    p_man_auc_ls = []
+    for nns in models:
+      u_r_nn = nns[0]
+      u_r_man = nns[1]
+      p_r_nn = nns[2]
+      p_r_man = nns[3]
+      u_nn_auc, u_man_auc, p_nn_auc, p_man_auc = evaluate(test_df, u_r_nn, u_r_man, p_r_nn, p_r_man)
+      u_nn_auc_ls.append(u_nn_auc)
+      u_man_auc_ls.append(u_man_auc)
+      p_nn_auc_ls.append(p_nn_auc)
+      p_man_auc_ls.append(p_man_auc)
+      u_nn_auc_ls_g.append(u_nn_auc)
+      u_man_auc_ls_g.append(u_man_auc)
+      p_nn_auc_ls_g.append(p_nn_auc)
+      p_man_auc_ls_g.append(p_man_auc)
+    u_nn_avg.append(sum(u_nn_auc_ls)/len(u_nn_auc_ls))
+    u_man_avg.append(sum(u_man_auc_ls)/len(u_man_auc_ls))
+    p_nn_avg.append(sum(p_nn_auc_ls)/len(p_nn_auc_ls))
+    p_man_avg.append(sum(p_man_auc_ls)/len(p_man_auc_ls))
+
+    u_nn_err.append(np.std(u_nn_auc_ls)/math.sqrt(5))
+    u_man_err.append(np.std(u_man_auc_ls)/math.sqrt(5))
+    p_nn_err.append(np.std(p_nn_auc_ls)/math.sqrt(5))
+    p_man_err.append(np.std(p_man_auc_ls)/math.sqrt(5))
+
+plt.errorbar(sizes,u_nn_avg,yerr=u_nn_err,label='Unparameterized NN Reweighted')
+plt.errorbar(sizes,u_man_avg,yerr=u_man_err,label='Unparameterized Manually Reweighted')
+plt.errorbar(sizes,p_nn_avg,yerr=p_nn_err,label='Parameterized NN Reweighted')
+plt.errorbar(sizes,p_man_avg,yerr=p_man_err,label='Parameterized Manually Reweighted')
 plt.title('Network Performance vs Training Set Size')
 plt.xlabel('Number of src Samples in Training Set')
 plt.ylabel('AUC')
 plt.legend(loc='best')
+plt.show()
+
+x, y = map(list, zip(*u_nn_auc_ls_g))
+plt.scatter(x,y,marker="o")
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Unparameterized NN Reweighted')
+plt.show()
+
+x, y = map(list, zip(*u_man_auc_ls_g))
+plt.scatter(x,y,marker="o")
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Unparameterized Manually Reweighted')
+plt.show()
+
+x, y = map(list, zip(*p_nn_auc_ls_g))
+plt.scatter(x,y,marker="o")
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Parameterized NN Reweighted')
+plt.show()
+
+x, y = map(list, zip(*p_man_auc_ls_g))
+plt.scatter(x,y,marker="o")
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Parameterized Manually Reweighted')
+plt.show()
+
+sizes = [1000, 5000, 10000, 20000, 50000, 100000]
+
+y = u_nn_auc_ls_g
+x = [1000,1000,1000,1000,1000,5000,5000,5000,5000,5000,10000,10000,10000,10000,10000,20000,20000,20000,20000,20000,50000,50000,50000,50000,50000,100000,100000,100000,100000,100000]
+plt.figure(1)
+plt.subplot(2,2,1)
+plt.scatter(x,y,marker="o")
+plt.plot(sizes,u_nn_avg,label='Average')
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Unparameterized NN Reweighted')
+plt.legend(loc='lower right')
+
+plt.subplot(2,2,2)
+y = u_man_auc_ls_g
+plt.scatter(x,y,marker="o")
+plt.plot(sizes,u_man_avg,label='Average')
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Unparameterized Manually Reweighted')
+plt.legend(loc='lower right')
+
+plt.subplot(2,2,3)
+y = p_nn_auc_ls_g
+plt.scatter(x,y,marker="o")
+plt.plot(sizes,p_nn_avg,label='Average')
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Parameterized NN Reweighted')
+plt.legend(loc='lower right')
+
+plt.subplot(2,2,4)
+y = p_man_auc_ls_g
+plt.scatter(x,y,marker="o")
+plt.plot(sizes,p_man_avg,label='Average')
+plt.xlabel('Number of src Samples in Training Set')
+plt.ylabel('AUC')
+plt.title('Parameterized Manually Reweighted')
+plt.legend(loc='lower right')
 plt.show()
