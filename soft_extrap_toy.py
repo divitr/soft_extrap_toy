@@ -26,47 +26,49 @@ import seaborn as sns
 import random
 import math
 
+
 def generate_data(size):
-  #generating pt (target)
-  #. normal distribution with mean 500 and std 50
-  pt_tar = norm.rvs(500, 50, size = size)
+  # generating pt (target)
+  # . normal distribution with mean 500 and std 50
+  pt_tar = norm.rvs(500, 50, size=size)
   label_tar = list()
   for pt in pt_tar:
     label_tar.append('target')
   pt_tar_labelled = zip(pt_tar, label_tar)
 
-  #generating pt (source)
-  #. truncated normal distribution with mean 0, std 100, truncated between 0 and 1000
+  # generating pt (source)
+  # . truncated normal distribution with mean 0, std 100, truncated between 0 and 1000
   clip_a, clip_b, mean, std = 0, 1500, 0, 100
   a, b = (clip_a - mean) / std, (clip_b - mean) / std
-  pt_src = truncnorm.rvs(a, b, loc = mean, scale = std, size = size)
+  pt_src = truncnorm.rvs(a, b, loc=mean, scale=std, size=size)
   label_src = list()
   for pt in pt_src:
     label_src.append('source')
   pt_src_labelled = zip(pt_src, label_src)
 
-  #generating pt (background)
-  #. exponential distribution with loc 0 and scale 200
-  pt_back = expon.rvs(0, 200, size = size)
+  # generating pt (background)
+  # . exponential distribution with loc 0 and scale 200
+  pt_back = expon.rvs(0, 200, size=size)
   label_back = list()
   for pt in pt_back:
     label_back.append('background')
   pt_back_labelled = zip(pt_back, label_back)
 
-  pt_list = list(pt_tar_labelled) + list(pt_src_labelled) + list(pt_back_labelled)
+  pt_list = list(pt_tar_labelled) + list(pt_src_labelled) + \
+                 list(pt_back_labelled)
 
-  #construct dataframe with pt values
+  # construct dataframe with pt values
   df = pd.DataFrame(pt_list, columns=['pt', 'label'])
 
-  #one-hot encode labels
+  # one-hot encode labels
   df = pd.get_dummies(df)
 
-  #generate features
+  # generate features
   f1_list = list()
   f2_list = list()
   for i in range(len(df)):
     pt = df.iloc[i, df.columns.get_loc('pt')]
-    if (df.iloc[i,df.columns.get_loc('label_background')] == 1):
+    if (df.iloc[i, df.columns.get_loc('label_background')] == 1):
       l = -1
     else:
       l = 1
@@ -82,38 +84,46 @@ def generate_data(size):
 
   return df
 
+
 def plot_pt(train_df):
     df_src = train_df.loc[(train_df['label_source'] == 1)]
     df_back = train_df.loc[(train_df['label_background'] == 1)]
     df_tar = train_df.loc[(train_df['label_target'] == 1)]
     bins = np.linspace(0, 1500, 100)
-    n_src, bins_src, patches_src = plt.hist(df_src['pt'].to_numpy(), bins, density=True, histtype='step', label = 'Source')
-    n_tar, bins_tar, patches_tar = plt.hist(df_tar['pt'].to_numpy(), bins, density=True, histtype='step', label = 'Target')
-    n_back, bins_back, patches_back = plt.hist(df_back['pt'].to_numpy(), bins, density=True, histtype='step', label = 'Background')
+    n_src, bins_src, patches_src = plt.hist(
+        df_src['pt'].to_numpy(), bins, density=True, histtype='step', label='Source')
+    n_tar, bins_tar, patches_tar = plt.hist(
+        df_tar['pt'].to_numpy(), bins, density=True, histtype='step', label='Target')
+    n_back, bins_back, patches_back = plt.hist(df_back['pt'].to_numpy(
+    ), bins, density=True, histtype='step', label='Background')
     plt.legend(loc='best')
     plt.show()
-    
-    #network reweighting
-    df = train_df.loc[(train_df['label_source'] == 1) | (train_df['label_background'] == 1)]
+
+    # network reweighting
+    df = train_df.loc[(train_df['label_source'] == 1) |
+                       (train_df['label_background'] == 1)]
 
     X = df['pt'].to_numpy()
     y = df['label_background'].to_numpy()
     X_src = df.loc[(df['label_source'] == 1)]['pt'].to_numpy()
 
     reweighting_model = keras.Sequential()
-    reweighting_model.add(layers.Dense(20,input_dim=1,activation='relu'))
-    reweighting_model.add(layers.Dense(40,activation='relu'))
-    reweighting_model.add(layers.Dense(1,activation='sigmoid'))
-    reweighting_model.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
-    reweighting_model.fit(X,y,epochs=20,batch_size=50,verbose=1,shuffle=True)
+    reweighting_model.add(layers.Dense(20, input_dim=1, activation='relu'))
+    reweighting_model.add(layers.Dense(40, activation='relu'))
+    reweighting_model.add(layers.Dense(1, activation='sigmoid'))
+    reweighting_model.compile(optimizer=Adam(
+        learning_rate=.001), loss='mean_squared_error', metrics=['accuracy'])
+    reweighting_model.fit(X, y, epochs=20, batch_size=50,
+                          verbose=1, shuffle=True)
 
     y_pred = reweighting_model.predict(X_src)
-    weights = np.divide(y_pred,(1-y_pred))
+    weights = np.divide(y_pred, (1-y_pred))
 
-    weights_nn=[]
+    weights_nn = []
     for w in weights:
       weights_nn.append(w[0])
-    train_df = train_df.loc[(train_df['label_source'] == 1) | (train_df['label_background'] == 1)]
+    train_df = train_df.loc[(train_df['label_source'] == 1) | (
+        train_df['label_background'] == 1)]
     src_df = train_df.loc[(train_df['label_source'] == 1)]
     back_df = train_df.loc[(train_df['label_background'] == 1)]
     src_df['weight_nn'] = weights_nn
@@ -123,19 +133,19 @@ def plot_pt(train_df):
         0: size/sum(weights_nn),
         1: 1
     }
-    
-    #manual reweighting
-    #. compute bin weights
+
+    # manual reweighting
+    # . compute bin weights
     weights = list()
     for i in range(0, 99):
       weights.append(n_back[i]/n_src[i])
 
-    #. assign weights for each pt value
-    train_df['weight'] = 1.0 #default weight
+    # . assign weights for each pt value
+    train_df['weight'] = 1.0  # default weight
     for i in range(train_df.shape[0]):
       if train_df.iloc[i, train_df.columns.get_loc('label_source')] == 1:
         for j in range(0, len(bins_src)):
-          if (bins_src[j] < train_df.iloc[i, 0] <= bins_src[j+1]): #is src and is in bin size
+          if (bins_src[j] < train_df.iloc[i, 0] <= bins_src[j+1]):  # is src and is in bin size
             train_df.iloc[i, train_df.columns.get_loc('weight')] = weights[j]
             break
 
@@ -145,66 +155,65 @@ def plot_pt(train_df):
 
     sum_src = 0
     for i in range(len(df_src)):
-      sum_src = sum_src + df_src.iloc[i,df_src.columns.get_loc('weight')]
+      sum_src = sum_src + df_src.iloc[i, df_src.columns.get_loc('weight')]
 
     class_weights = {
         0: size/sum_src,
         1: 1
     }
-    return train_df,class_weights_nn, class_weights
-  
-  def train_models(train_df,class_weights_nn,class_weights):     #output 1 means background
-    
-    train_df = shuffle(train_df)
-    
-    #UR - NN
-    X = train_df[['f1','f2']].to_numpy().reshape(-1,2)
-    y = train_df[['label_background']].to_numpy()
+    return train_df, class_weights_nn, class_weights
 
-    u_r_nn = keras.Sequential()
-    u_r_nn.add(layers.Dense(16,activation='relu',input_shape = (2,)))
-    u_r_nn.add(layers.Dense(8,activation='relu'))
-    u_r_nn.add(layers.Dense(1,activation='sigmoid'))
-    u_r_nn.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
-    u_r_nn.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight_nn'].to_numpy(),class_weight=class_weights_nn)
-    
-    #UR - Manual
-    #output 1 means background
-    X = train_df[['f1','f2']].to_numpy().reshape(-1,2)
-    y = train_df[['label_background']].to_numpy()
+def train_models(train_df,class_weights_nn,class_weights):     #output 1 means background
+        train_df = shuffle(train_df)
+        
+        # UR - NN
+        X = train_df[['f1','f2']].to_numpy().reshape(-1,2)
+        y = train_df[['label_background']].to_numpy()
 
-    u_r_man = keras.Sequential()
-    u_r_man.add(layers.Dense(16,activation='relu',input_shape = (2,)))
-    u_r_man.add(layers.Dense(8,activation='relu'))
-    u_r_man.add(layers.Dense(1,activation='sigmoid'))
-    u_r_man.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
-    u_r_man.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight'].to_numpy(),class_weight=class_weights)
-    
-    #PR - NN
-    X = train_df[['f1','f2','pt']].to_numpy().reshape(-1,3)
-    y - train_df[['label_background']].to_numpy()
+        u_r_nn = keras.Sequential()
+        u_r_nn.add(layers.Dense(16,activation='relu',input_shape = (2,)))
+        u_r_nn.add(layers.Dense(8,activation='relu'))
+        u_r_nn.add(layers.Dense(1,activation='sigmoid'))
+        u_r_nn.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
+        u_r_nn.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight_nn'].to_numpy(),class_weight=class_weights_nn)
+        
+        # UR - Manual
+        # output 1 means background
+        X = train_df[['f1','f2']].to_numpy().reshape(-1,2)
+        y = train_df[['label_background']].to_numpy()
 
-    p_r_nn = keras.Sequential()
-    p_r_nn.add(layers.Dense(16,activation='relu',input_shape = (3,)))
-    p_r_nn.add(layers.Dense(8,activation='relu'))
-    p_r_nn.add(layers.Dense(1,activation='sigmoid'))
-    p_r_nn.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
-    p_r_nn.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight_nn'].to_numpy(),class_weight=class_weights_nn)
-    
-    #PR - Manual
-    X = train_df[['f1','f2','pt']].to_numpy().reshape(-1,3)
-    y - train_df[['label_background']].to_numpy()
+        u_r_man = keras.Sequential()
+        u_r_man.add(layers.Dense(16,activation='relu',input_shape = (2,)))
+        u_r_man.add(layers.Dense(8,activation='relu'))
+        u_r_man.add(layers.Dense(1,activation='sigmoid'))
+        u_r_man.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
+        u_r_man.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight'].to_numpy(),class_weight=class_weights)
+        
+        # PR - NN
+        X = train_df[['f1','f2','pt']].to_numpy().reshape(-1,3)
+        y - train_df[['label_background']].to_numpy()
 
-    p_r_man = keras.Sequential()
-    p_r_man.add(layers.Dense(16,activation='relu',input_shape = (3,)))
-    p_r_man.add(layers.Dense(8,activation='relu'))
-    p_r_man.add(layers.Dense(1,activation='sigmoid'))
-    p_r_man.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
-    p_r_man.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight'].to_numpy(),class_weight=class_weights)
+        p_r_nn = keras.Sequential()
+        p_r_nn.add(layers.Dense(16,activation='relu',input_shape = (3,)))
+        p_r_nn.add(layers.Dense(8,activation='relu'))
+        p_r_nn.add(layers.Dense(1,activation='sigmoid'))
+        p_r_nn.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
+        p_r_nn.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight_nn'].to_numpy(),class_weight=class_weights_nn)
+        
+        # PR - Manual
+        X = train_df[['f1','f2','pt']].to_numpy().reshape(-1,3)
+        y - train_df[['label_background']].to_numpy()
+
+        p_r_man = keras.Sequential()
+        p_r_man.add(layers.Dense(16,activation='relu',input_shape = (3,)))
+        p_r_man.add(layers.Dense(8,activation='relu'))
+        p_r_man.add(layers.Dense(1,activation='sigmoid'))
+        p_r_man.compile(optimizer=Adam(learning_rate=.001),loss='mean_squared_error',metrics=['accuracy'])
+        p_r_man.fit(x=X,y=y,validation_split=.1,batch_size=16,epochs=10,shuffle=True,verbose=1,sample_weight=train_df['weight'].to_numpy(),class_weight=class_weights)
+        
+        return u_r_nn, u_r_man, p_r_nn, p_r_man
     
-    return u_r_nn, u_r_man, p_r_nn, p_r_man
-  
-  def evaluate(test_df, u_nn, u_man, p_nn, p_man):
+def evaluate(test_df, u_nn, u_man, p_nn, p_man):
     X = test_df[['f1','f2']].to_numpy().reshape(-1,2)
     y = test_df['label_background'].to_numpy()
     
@@ -237,10 +246,10 @@ def plot_pt(train_df):
     plt.title('ROC (trained on src, evaluated on tar) - ' + str(size) + ' src samples')
     plt.legend(loc="lower right")
     plt.show()
-    
+  
     return u_nn_auc, u_man_auc, p_nn_auc, p_man_auc
   
-  sizes = [1000, 5000, 10000, 20000, 50000, 100000]
+sizes = [100, 500, 1000, 2000, 5000, 10000]
 u_nn_avg = []
 u_man_avg = []
 p_nn_avg = []
@@ -256,7 +265,7 @@ u_man_auc_ls_g = []
 p_nn_auc_ls_g = []
 p_man_auc_ls_g = []
 
-test_df = generate_data(100000)
+test_df = generate_data(10000)
 
 for size in sizes:
     print(str(size)+'-----------------------------------------------------------------------------')
@@ -332,10 +341,10 @@ plt.ylabel('AUC')
 plt.title('Parameterized Manually Reweighted')
 plt.show()
 
-sizes = [1000, 5000, 10000, 20000, 50000, 100000]
+sizes = [100, 500, 1000, 2000, 5000, 10000]
 
 y = u_nn_auc_ls_g
-x = [1000,1000,1000,1000,1000,5000,5000,5000,5000,5000,10000,10000,10000,10000,10000,20000,20000,20000,20000,20000,50000,50000,50000,50000,50000,100000,100000,100000,100000,100000]
+x = [100,100,100,100,100,500,500,500,500,500,1000,1000,1000,1000,1000,2000,2000,2000,2000,2000,5000,5000,5000,5000,5000,10000,10000,10000,10000,10000]
 plt.figure(1)
 plt.subplot(2,2,1)
 plt.scatter(x,y,marker="o")
